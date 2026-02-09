@@ -5,3 +5,5 @@ token.json
 node_modules/
 __pycache__/
 *.pyc
+venv/
+cron.log

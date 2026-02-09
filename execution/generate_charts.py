@@ -5,7 +5,17 @@ import matplotlib.pyplot as plt
 import json
 
 # Set Korean font for Matplotlib
-plt.rcParams['font.family'] = 'Malgun Gothic'
+import matplotlib.font_manager as fm
+
+# Explicitly add the font file
+font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
+if os.path.exists(font_path):
+    fm.fontManager.addfont(font_path)
+    plt.rcParams['font.family'] = 'NanumGothic'
+else:
+    # Fallback for other environments
+    plt.rcParams['font.family'] = 'sans-serif'
+
 plt.rcParams['axes.unicode_minus'] = False
 
 def generate_stock_charts(data_path=".tmp/market_data.pkl", filtered_csv=".tmp/filtered_stocks.csv"):
@@ -31,7 +41,7 @@ def generate_stock_charts(data_path=".tmp/market_data.pkl", filtered_csv=".tmp/f
     print(f"Generating charts for {chart_count} stocks...")
     
     mc = mpf.make_marketcolors(up='r', down='b', edge='inherit', wick='inherit', volume='in', ohlc='inherit')
-    s  = mpf.make_mpf_style(marketcolors=mc, gridstyle='--', y_on_right=False, rc={'font.family': 'Malgun Gothic'})
+    s  = mpf.make_mpf_style(marketcolors=mc, gridstyle='--', y_on_right=False, rc={'font.family': 'NanumGothic'})
 
     for idx, row in data_to_plot.iterrows():
         ticker = str(row['code']).zfill(6)

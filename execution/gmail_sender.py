@@ -143,7 +143,8 @@ if __name__ == "__main__":
     # 메일링 리스트: 여기에 추가하고 싶은 이메일 주소들을 쉼표로 구분해서 넣어주세요.
     mailing_list = [
         "eyedoloveu@gmail.com",
-        "1004dlfksl@gmail.com"
+        "1004dlfksl@gmail.com",
+        "firstq@naver.com"
     ]
     
     for email in mailing_list:

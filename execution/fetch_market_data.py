@@ -1,85 +1,88 @@
 import os
 import pandas as pd
-from pykrx import stock
+import FinanceDataReader as fdr
 from datetime import datetime, timedelta
 import time
 
 def fetch_all_ohlcv(days_back=60):
     """
-    Optimized fetcher: Gets market-wide data using get_market_ohlcv.
+    Stabilized fetcher using FinanceDataReader (fdr)
     """
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y%m%d")
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
     
     tmp_dir = ".tmp"
+    pkl_path = os.path.join(tmp_dir, "market_data.pkl")
+    
+    # Check if we already have fresh data for today
+    if os.path.exists(pkl_path):
+        mtime = datetime.fromtimestamp(os.path.getmtime(pkl_path))
+        if mtime.date() == datetime.now().date():
+            print(f"Fresh market data found at {pkl_path}. Skipping fetch.")
+            return
+
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
 
-    print(f"Fetching business days between {start_date} and {end_date}...")
+    print(f"Fetching market symbols (KOSPI & KOSDAQ)...")
     try:
-        # Get business days using a representative ticker
-        sample_df = stock.get_market_ohlcv_by_date(start_date, end_date, "005930")
-        if sample_df.empty:
-            print("No business days found in range.")
-            return
-        business_days = sample_df.index.strftime("%Y%m%d").tolist()
+        # Get list of all stocks
+        df_kospi = fdr.StockListing('KOSPI')
+        df_kosdaq = fdr.StockListing('KOSDAQ')
+        df_list = pd.concat([df_kospi, df_kosdaq])
+        
+        # Save ticker info for mapping
+        ticker_info = df_list[['Code', 'Name', 'Marcap']].rename(columns={
+            'Code': 'code', 
+            'Name': 'name',
+            'Marcap': '시가총액'
+        })
+        ticker_info.to_csv(os.path.join(tmp_dir, "tickers.csv"), index=False)
+        print(f"Found {len(ticker_info)} tickers.")
+        
+        # Create marcap mapping
+        marcap_map = dict(zip(ticker_info['code'], ticker_info['시가총액']))
     except Exception as e:
-        print(f"Error getting business days: {e}")
+        print(f"Error getting ticker list: {e}")
         return
 
-    print(f"Total business days to fetch: {len(business_days)}")
-    
-    # Save ticker names for mapping
-    print("Fetching ticker names...")
-    tickers_kospi = stock.get_market_ticker_list(market="KOSPI")
-    tickers_kosdaq = stock.get_market_ticker_list(market="KOSDAQ")
-    all_tickers = list(set(tickers_kospi + tickers_kosdaq))
-    
-    ticker_info = []
-    # Fetch names in chunks or as a dict
-    for ticker in all_tickers:
-        name = stock.get_market_ticker_name(ticker)
-        ticker_info.append({"code": ticker, "name": name})
-    pd.DataFrame(ticker_info).to_csv(os.path.join(tmp_dir, "tickers.csv"), index=False)
+    # To scan the whole market but keep it fast, we identify business days
+    sample = fdr.DataReader('005930', start_date, end_date)
+    business_days = sample.index.strftime("%Y-%m-%d").tolist()
+    print(f"Business days identified: {len(business_days)}")
 
+    # Fetch all tickers in the market
+    target_codes = ticker_info['code'].tolist()
+    
     data_list = []
+    print(f"Fetching OHLCV for {len(target_codes)} stocks...")
     
-    for date in business_days:
-        print(f"Fetching data for {date}...", end=" ", flush=True)
+    for i, code in enumerate(target_codes):
+        if i % 100 == 0: print(f"Processing... {i}/{len(target_codes)}")
         try:
-            # get_market_ohlcv is the correct and robust function for market-wide data on a date
-            df_kospi = stock.get_market_ohlcv(date, market="KOSPI")
-            df_kosdaq = stock.get_market_ohlcv(date, market="KOSDAQ")
-            
-            day_df = pd.concat([df_kospi, df_kosdaq])
-            
-            if day_df.empty:
-                print("Empty.")
-                continue
+            df = fdr.DataReader(code, start_date, end_date)
+            if not df.empty:
+                df['code'] = code
+                # Calculate required columns for strategy_processor
+                df['등락률'] = df['Change'] * 100
+                df['시가총액'] = marcap_map.get(code, 0)
+                df['거래대금'] = df['Close'] * df['Volume']
                 
-            day_df['날짜'] = pd.to_datetime(date)
-            # Ticker index is named '티커' after concat usually, or just an anonymous index
-            day_df.reset_index(inplace=True)
-            # Rename for strategy_processor
-            if '티커' in day_df.columns:
-                day_df.rename(columns={'티커': 'code'}, inplace=True)
-            elif 'index' in day_df.columns:
-                day_df.rename(columns={'index': 'code'}, inplace=True)
+                # Rename standard columns
+                df.rename(columns={
+                    'Open': '시가', 'High': '고가', 'Low': '저가', 'Close': '종가', 'Volume': '거래량'
+                }, inplace=True)
+                data_list.append(df)
+        except:
+            continue
             
-            data_list.append(day_df)
-            print("Done.")
-        except Exception as e:
-            print(f"Error: {e}")
-        
-        time.sleep(0.3) 
-
     if data_list:
         full_df = pd.concat(data_list)
-        full_df.set_index('날짜', inplace=True)
+        full_df.index.name = '날짜'
         full_df.to_pickle(os.path.join(tmp_dir, "market_data.pkl"))
-        print(f"\nSaved {len(full_df)} rows to {os.path.join(tmp_dir, 'market_data.pkl')}")
+        print(f"Saved {len(full_df)} rows to .tmp/market_data.pkl")
     else:
-        print("\nNo data fetched.")
+        print("No data fetched.")
 
 if __name__ == "__main__":
     fetch_all_ohlcv()
