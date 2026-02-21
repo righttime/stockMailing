@@ -53,8 +53,10 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
     html_head = """
     <html>
     <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         .container { width: 100%; max-width: 1000px; margin: 0 auto; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
+        .items-wrapper { text-align: center; }
         .item { 
             display: inline-block; 
             width: 45%; 
@@ -66,6 +68,7 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
             box-sizing: border-box;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: left;
         }
         .rank-badge { background: #e74c3c; color: #fff; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 1.1em; }
         .price-info { font-size: 1.2em; color: #333; margin: 10px 0; }
@@ -82,13 +85,22 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
         .news-list li { margin-bottom: 5px; }
         img { width: 100%; height: auto; border: 1px solid #eee; border-radius: 4px; margin: 5px 0; }
         h3 { margin: 10px 0 5px 0; color: #2c3e50; }
+        
+        /* 반응형: 모바일 (600px 이하) - 1열 */
+        @media only screen and (max-width: 600px) {
+            .item {
+                width: 96% !important;
+                margin: 2% !important;
+                display: block !important;
+            }
+        }
     </style>
     </head>
     <body>
     <div class="container">
         <h1 style="text-align: center; color: #333;">오늘의 눌림목 TOP 100 분석 리포트</h1>
         <p style="text-align: center; color: #666;">(순위 기준: 등락률 + 시가총액 + 거래대금 합산 점수)</p>
-        <div style="text-align: center; margin-bottom: 30px;">
+        <div class="items-wrapper">
     """
 
     html_items = ""
