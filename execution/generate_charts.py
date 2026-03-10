@@ -23,6 +23,11 @@ def generate_stock_charts(data_path=".tmp/market_data.pkl", filtered_csv=".tmp/f
         print("Required data for charts not found.")
         return
 
+    # 빈 CSV 대응
+    if os.path.getsize(filtered_csv) == 0:
+        print("No filtered stocks to chart (empty CSV). Skipping.")
+        return
+
     full_df = pd.read_pickle(data_path)
     filtered_df = pd.read_csv(filtered_csv)
     

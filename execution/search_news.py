@@ -42,8 +42,11 @@ def fetch_stock_news_naver(stock_code, stock_name):
     return news_list
 
 def gather_all_news(filtered_csv=".tmp/filtered_stocks.csv"):
-    if not os.path.exists(filtered_csv):
-        print("No filtered stocks found.")
+    if not os.path.exists(filtered_csv) or os.path.getsize(filtered_csv) == 0:
+        print("No filtered stocks found (empty or missing). Skipping news.")
+        # 빈 JSON 생성 (gmail_sender 에러 방지)
+        with open(".tmp/news_context.json", "w", encoding="utf-8") as f:
+            json.dump([], f)
         return
     
     df = pd.read_csv(filtered_csv)

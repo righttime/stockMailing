@@ -50,7 +50,13 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
     with open(context_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    html_head = """
+    # 전략 메타데이터 로드
+    strategy_meta = {"name": "분석", "description": ""}
+    if os.path.exists(".tmp/strategy_meta.json"):
+        with open(".tmp/strategy_meta.json", "r", encoding="utf-8") as f:
+            strategy_meta = json.load(f)
+
+    html_css = """
     <html>
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -98,10 +104,13 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
     </head>
     <body>
     <div class="container">
-        <h1 style="text-align: center; color: #333;">오늘의 눌림목 TOP 100 분석 리포트</h1>
-        <p style="text-align: center; color: #666;">(순위 기준: 등락률 + 시가총액 + 거래대금 합산 점수)</p>
+    """
+    html_header = f"""
+        <h1 style="text-align: center; color: #333;">오늘의 {strategy_meta['name']} 분석 리포트 ({len(data)}종목)</h1>
+        <p style="text-align: center; color: #666;">{strategy_meta.get('description', '')}<br/>(순위 기준: 평균 거래대금)</p>
         <div class="items-wrapper">
     """
+    html_head = html_css + html_header
 
     html_items = ""
     image_paths = {}
@@ -111,21 +120,17 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
         ticker = str(item['code']).zfill(6)
         chart_path = os.path.join(chart_dir, f"{ticker}.png")
         
-        # Accessing ranking fields precisely
-        r_change = item.get('rank_change', '-')
-        r_cap = item.get('rank_cap', '-')
-        r_value = item.get('rank_value', '-')
-        total_score = item.get('total_score', '-')
+        avg_value = item.get('avg_value', 0)
+        avg_value_str = f"{avg_value / 100_000_000:.1f}억" if avg_value >= 100_000_000 else f"{avg_value / 10_000:.0f}만"
         
         html_items += f"""
         <div class="item">
-            <span class="rank-badge">NO.{idx+1}</span>
+            <span class="rank-badge">NO.{item.get('rank', idx+1)}</span>
             <h3>{item['name']} ({item['code']})</h3>
             <div class="price-info"><strong>{item['price']:,}원</strong> <span style="color:{'#e74c3c' if item['change'] > 0 else '#3498db'}">({item['change']}%)</span></div>
             
             <div class="rank-details">
-                <b>종합 점수:</b> {total_score}<br/>
-                <b>상세 순위:</b> 등락 {r_change}위 | 시총 {r_cap}위 | 거래 {r_value}위
+                <b>평균 거래대금:</b> {avg_value_str}
             </div>
         """
         
@@ -143,7 +148,8 @@ def send_report(recipient_email, context_file=".tmp/news_context.json"):
     full_html = html_head + html_items + html_foot
 
     service = get_gmail_service()
-    message = create_message_with_images("me", recipient_email, f"[Stock Alpha] 오늘의 분석 리스트 (TOP {len(data)})", full_html, image_paths)
+    subject = f"[Stock Alpha] {strategy_meta['name']} 분석 리포트 ({len(data)}종목)"
+    message = create_message_with_images("me", recipient_email, subject, full_html, image_paths)
     
     try:
         service.users().messages().send(userId="me", body=message).execute()
@@ -155,8 +161,8 @@ if __name__ == "__main__":
     # 메일링 리스트: 여기에 추가하고 싶은 이메일 주소들을 쉼표로 구분해서 넣어주세요.
     mailing_list = [
         "eyedoloveu@gmail.com",
-        "1004dlfksl@gmail.com",
-        "firstq@naver.com"
+        # "1004dlfksl@gmail.com",
+        # "firstq@naver.com"
     ]
     
     for email in mailing_list:

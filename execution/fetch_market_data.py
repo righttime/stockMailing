@@ -3,8 +3,9 @@ import pandas as pd
 import FinanceDataReader as fdr
 from datetime import datetime, timedelta
 import time
+import argparse
 
-def fetch_all_ohlcv(days_back=60):
+def fetch_all_ohlcv(days_back=300, force_refresh=False):
     """
     Stabilized fetcher using FinanceDataReader (fdr)
     """
@@ -15,7 +16,7 @@ def fetch_all_ohlcv(days_back=60):
     pkl_path = os.path.join(tmp_dir, "market_data.pkl")
     
     # Check if we already have fresh data for today
-    if os.path.exists(pkl_path):
+    if not force_refresh and os.path.exists(pkl_path):
         mtime = datetime.fromtimestamp(os.path.getmtime(pkl_path))
         if mtime.date() == datetime.now().date():
             print(f"Fresh market data found at {pkl_path}. Skipping fetch.")
@@ -44,7 +45,14 @@ def fetch_all_ohlcv(days_back=60):
         marcap_map = dict(zip(ticker_info['code'], ticker_info['시가총액']))
     except Exception as e:
         print(f"Error getting ticker list: {e}")
-        return
+        if os.path.exists(os.path.join(tmp_dir, "tickers.csv")):
+            print("Using cached tickers.csv ...")
+            ticker_info = pd.read_csv(os.path.join(tmp_dir, "tickers.csv"))
+            ticker_info['code'] = ticker_info['code'].astype(str).str.zfill(6)
+            marcap_map = dict(zip(ticker_info['code'], ticker_info['시가총액']))
+        else:
+            print("No cached tickers.csv found. Exiting.")
+            return
 
     # To scan the whole market but keep it fast, we identify business days
     sample = fdr.DataReader('005930', start_date, end_date)
@@ -57,11 +65,22 @@ def fetch_all_ohlcv(days_back=60):
     data_list = []
     print(f"Fetching OHLCV for {len(target_codes)} stocks...")
     
+    import concurrent.futures
+
+    # Timeout context for fetching per ticker
+    def fetch_with_timeout(code, start_date, end_date, timeout=5):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fdr.DataReader, code, start_date, end_date)
+            try:
+                return future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                return None
+
     for i, code in enumerate(target_codes):
         if i % 100 == 0: print(f"Processing... {i}/{len(target_codes)}")
         try:
-            df = fdr.DataReader(code, start_date, end_date)
-            if not df.empty:
+            df = fetch_with_timeout(code, start_date, end_date, timeout=10)
+            if df is not None and not df.empty:
                 df['code'] = code
                 # Calculate required columns for strategy_processor
                 df['등락률'] = df['Change'] * 100
@@ -85,4 +104,8 @@ def fetch_all_ohlcv(days_back=60):
         print("No data fetched.")
 
 if __name__ == "__main__":
-    fetch_all_ohlcv()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--force-refresh", action="store_true", help="Force refresh market data even if it was already fetched today")
+    args = parser.parse_args()
+    
+    fetch_all_ohlcv(force_refresh=args.force_refresh)
